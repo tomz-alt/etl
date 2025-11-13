@@ -19,6 +19,7 @@ use etl_destinations::iceberg::{
 };
 use etl_destinations::{
     bigquery::BigQueryDestination,
+    doris::DorisDestination,
     iceberg::{IcebergClient, IcebergDestination},
 };
 use secrecy::ExposeSecret;
@@ -142,6 +143,30 @@ pub async fn start_replicator_with_config(
             let pipeline = Pipeline::new(replicator_config.pipeline, state_store, destination);
             start_pipeline(pipeline).await?;
         }
+        DestinationConfig::Doris {
+            host,
+            query_port,
+            http_port,
+            database,
+            username,
+            password,
+            max_concurrent_streams,
+        } => {
+            let destination = DorisDestination::new(
+                host.clone(),
+                *query_port,
+                *http_port,
+                database.clone(),
+                username.clone(),
+                password.expose_secret().to_string(),
+                *max_concurrent_streams,
+                state_store.clone(),
+            )
+            .await?;
+
+            let pipeline = Pipeline::new(replicator_config.pipeline, state_store, destination);
+            start_pipeline(pipeline).await?;
+        }
     }
 
     info!("replicator service completed");
@@ -222,6 +247,25 @@ fn log_destination_config(config: &DestinationConfig) {
                 namespace,
                 s3_endpoint,
                 "using generic REST iceberg destination config"
+            )
+        }
+        DestinationConfig::Doris {
+            host,
+            query_port,
+            http_port,
+            database,
+            username,
+            password: _,
+            max_concurrent_streams,
+        } => {
+            debug!(
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                max_concurrent_streams,
+                "using Doris destination config"
             )
         }
     }

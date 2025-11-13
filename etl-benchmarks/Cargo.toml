@@ -10,7 +10,7 @@ homepage.workspace = true
 [dev-dependencies]
 etl = { workspace = true, features = ["test-utils"] }
 etl-config = { workspace = true }
-etl-destinations = { workspace = true, features = ["bigquery"] }
+etl-destinations = { workspace = true, features = ["bigquery", "doris"] }
 etl-postgres = { workspace = true, features = ["sqlx"] }
 etl-telemetry = { workspace = true }
 

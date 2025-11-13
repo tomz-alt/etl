@@ -30,6 +30,16 @@ iceberg = [
     "dep:serde",
     "dep:serde_json",
 ]
+doris = [
+    "dep:mysql_async",
+    "dep:rustls",
+    "dep:tracing",
+    "dep:tokio",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:reqwest",
+    "dep:base64",
+]
 
 [dependencies]
 etl = { workspace = true }
@@ -44,6 +54,7 @@ gcp-bigquery-client = { workspace = true, optional = true, features = [
 ] }
 iceberg = { workspace = true, optional = true }
 iceberg-catalog-rest = { workspace = true, optional = true }
+mysql_async = { workspace = true, optional = true, features = ["default"] }
 parquet = { workspace = true, optional = true, features = ["async", "arrow"] }
 prost = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["json"] }

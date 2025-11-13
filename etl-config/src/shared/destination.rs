@@ -47,6 +47,29 @@ pub enum DestinationConfig {
         #[serde(flatten)]
         config: IcebergConfig,
     },
+    /// Apache Doris destination configuration.
+    ///
+    /// Use this variant to configure a Doris destination, including
+    /// host, port, database, and authentication credentials.
+    Doris {
+        /// Doris frontend host address.
+        host: String,
+        /// Doris query port (typically 9030 for MySQL protocol).
+        query_port: u16,
+        /// Doris HTTP port (typically 8030 for StreamLoad).
+        http_port: u16,
+        /// Database name in Doris.
+        database: String,
+        /// Username for authenticating with Doris.
+        username: String,
+        /// Password for authenticating with Doris.
+        password: SecretString,
+        /// Maximum number of concurrent streams for Doris write operations.
+        ///
+        /// Defines the upper limit of concurrent streams used for a **single** write
+        /// request to Doris.
+        max_concurrent_streams: usize,
+    },
 }
 
 /// Configuration for the iceberg destination with two variants
@@ -199,6 +222,27 @@ pub enum DestinationConfigWithoutSecrets {
         #[serde(flatten)]
         config: IcebergConfigWithoutSecrets,
     },
+    /// Apache Doris destination configuration.
+    ///
+    /// Use this variant to configure a Doris destination, including
+    /// host, port, database, and authentication credentials.
+    Doris {
+        /// Doris frontend host address.
+        host: String,
+        /// Doris query port (typically 9030 for MySQL protocol).
+        query_port: u16,
+        /// Doris HTTP port (typically 8030 for StreamLoad).
+        http_port: u16,
+        /// Database name in Doris.
+        database: String,
+        /// Username for authenticating with Doris.
+        username: String,
+        /// Maximum number of concurrent streams for Doris write operations.
+        ///
+        /// Defines the upper limit of concurrent streams used for a **single** write
+        /// request to Doris.
+        max_concurrent_streams: usize,
+    },
 }
 
 impl From<DestinationConfig> for DestinationConfigWithoutSecrets {
@@ -219,6 +263,22 @@ impl From<DestinationConfig> for DestinationConfigWithoutSecrets {
             },
             DestinationConfig::Iceberg { config } => DestinationConfigWithoutSecrets::Iceberg {
                 config: config.into(),
+            },
+            DestinationConfig::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password: _,
+                max_concurrent_streams,
+            } => DestinationConfigWithoutSecrets::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                max_concurrent_streams,
             },
         }
     }

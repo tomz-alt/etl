@@ -55,6 +55,23 @@ cargo bench --bench table_copies --features bigquery -- --log-target terminal ru
   --bq-sa-key-file /path/to/service-account-key.json
 ```
 
+### 4. Run Apache Doris Benchmark
+
+Test with Apache Doris destination:
+
+```bash
+cargo bench --bench table_copies --features doris -- --log-target terminal run \
+  --host localhost --port 5432 --database bench \
+  --username postgres --password mypass \
+  --publication-name bench_pub \
+  --table-ids 1,2,3 \
+  --destination doris \
+  --doris-host 127.0.0.1 \
+  --doris-database test_db \
+  --doris-username root \
+  --doris-password ""
+```
+
 ## Command Reference
 
 ### Common Parameters
@@ -67,8 +84,8 @@ cargo bench --bench table_copies --features bigquery -- --log-target terminal ru
 | `--username`         | Postgres username                        | `postgres`  |
 | `--password`         | Postgres password                        | (optional)  |
 | `--publication-name` | Publication to replicate from            | `bench_pub` |
-| `--table-ids`        | Comma-separated table IDs to replicate   | (required)  |
-| `--destination`      | Destination type (`null` or `big-query`) | `null`      |
+| `--table-ids`        | Comma-separated table IDs to replicate             | (required)  |
+| `--destination`      | Destination type (`null`, `big-query`, or `doris`) | `null`      |
 
 ### Performance Tuning Parameters
 
@@ -80,12 +97,25 @@ cargo bench --bench table_copies --features bigquery -- --log-target terminal ru
 
 ### BigQuery Parameters
 
-| Parameter                 | Description                   | Required for BigQuery |
-| ------------------------- | ----------------------------- | --------------------- |
-| `--bq-project-id`         | GCP project ID                | Yes                   |
-| `--bq-dataset-id`         | BigQuery dataset ID           | Yes                   |
-| `--bq-sa-key-file`        | Service account key file path | Yes                   |
-| `--bq-max-staleness-mins` | Max staleness in minutes      | No                    |
+| Parameter                      | Description                   | Required for BigQuery |
+| ------------------------------ | ----------------------------- | --------------------- |
+| `--bq-project-id`              | GCP project ID                | Yes                   |
+| `--bq-dataset-id`              | BigQuery dataset ID           | Yes                   |
+| `--bq-sa-key-file`             | Service account key file path | Yes                   |
+| `--bq-max-staleness-mins`      | Max staleness in minutes      | No                    |
+| `--bq-max-concurrent-streams`  | Max concurrent streams        | No (default: 32)      |
+
+### Apache Doris Parameters
+
+| Parameter                        | Description                      | Required for Doris |
+| -------------------------------- | -------------------------------- | ------------------ |
+| `--doris-host`                   | Doris FE host                    | Yes                |
+| `--doris-database`               | Doris database name              | Yes                |
+| `--doris-query-port`             | MySQL protocol port              | No (default: 9030) |
+| `--doris-http-port`              | StreamLoad HTTP port             | No (default: 8030) |
+| `--doris-username`               | Doris username                   | No (default: root) |
+| `--doris-password`               | Doris password                   | No (default: "")   |
+| `--doris-max-concurrent-streams` | Max concurrent write streams     | No (default: 4)    |
 
 ### Logging Options
 
@@ -125,6 +155,32 @@ cargo bench --bench table_copies --features bigquery -- --log-target terminal ru
   --bq-project-id my-gcp-project \
   --bq-dataset-id my_dataset \
   --bq-sa-key-file /path/to/service-account-key.json \
+  --batch-max-size 50000 \
+  --max-table-sync-workers 16
+```
+
+### High-throughput Doris Test
+
+```bash
+# First, start Doris with Docker Compose
+cd etl-destinations/tests
+docker compose -f docker-compose-doris.yml up -d
+
+# Create test database
+mysql -h 127.0.0.1 -P 9030 -u root -e "CREATE DATABASE IF NOT EXISTS bench;"
+
+# Run benchmark
+cargo bench --bench table_copies --features doris -- --log-target terminal run \
+  --host localhost --port 5432 --database bench \
+  --username postgres --password mypass \
+  --publication-name bench_pub \
+  --table-ids 1,2,3,4,5 \
+  --destination doris \
+  --doris-host 127.0.0.1 \
+  --doris-database bench \
+  --doris-username root \
+  --doris-password "" \
+  --doris-max-concurrent-streams 8 \
   --batch-max-size 50000 \
   --max-table-sync-workers 16
 ```

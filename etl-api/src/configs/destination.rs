@@ -34,6 +34,23 @@ pub enum FullApiDestinationConfig {
         #[serde(flatten)]
         config: FullApiIcebergConfig,
     },
+    Doris {
+        #[schema(example = "localhost")]
+        host: String,
+        #[schema(example = 9030)]
+        query_port: u16,
+        #[schema(example = 8030)]
+        http_port: u16,
+        #[schema(example = "my_database")]
+        database: String,
+        #[schema(example = "root")]
+        username: String,
+        #[schema(example = "password123")]
+        password: SerializableSecretString,
+        #[schema(example = 8)]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_concurrent_streams: Option<usize>,
+    },
 }
 
 impl From<StoredDestinationConfig> for FullApiDestinationConfig {
@@ -91,6 +108,23 @@ impl From<StoredDestinationConfig> for FullApiDestinationConfig {
                     },
                 },
             },
+            StoredDestinationConfig::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password,
+                max_concurrent_streams,
+            } => Self::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password,
+                max_concurrent_streams: Some(max_concurrent_streams),
+            },
         }
     }
 }
@@ -109,6 +143,15 @@ pub enum StoredDestinationConfig {
     Iceberg {
         #[serde(flatten)]
         config: StoredIcebergConfig,
+    },
+    Doris {
+        host: String,
+        query_port: u16,
+        http_port: u16,
+        database: String,
+        username: String,
+        password: SerializableSecretString,
+        max_concurrent_streams: usize,
     },
 }
 
@@ -166,6 +209,23 @@ impl StoredDestinationConfig {
                         s3_endpoint,
                     },
                 },
+            },
+            Self::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password,
+                max_concurrent_streams,
+            } => DestinationConfig::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password: password.into(),
+                max_concurrent_streams,
             },
         }
     }
@@ -226,6 +286,24 @@ impl From<FullApiDestinationConfig> for StoredDestinationConfig {
                         s3_endpoint,
                     },
                 },
+            },
+            FullApiDestinationConfig::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password,
+                max_concurrent_streams,
+            } => Self::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password,
+                max_concurrent_streams: max_concurrent_streams
+                    .unwrap_or(DEFAULT_MAX_CONCURRENT_STREAMS),
             },
         }
     }
@@ -314,6 +392,28 @@ impl Encrypt<EncryptedStoredDestinationConfig> for StoredDestinationConfig {
                     })
                 }
             },
+            Self::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password,
+                max_concurrent_streams,
+            } => {
+                let encrypted_password =
+                    encrypt_text(password.expose_secret().to_owned(), encryption_key)?;
+
+                Ok(EncryptedStoredDestinationConfig::Doris {
+                    host,
+                    query_port,
+                    http_port,
+                    database,
+                    username,
+                    password: encrypted_password,
+                    max_concurrent_streams,
+                })
+            }
         }
     }
 }
@@ -332,6 +432,15 @@ pub enum EncryptedStoredDestinationConfig {
     Iceberg {
         #[serde(flatten)]
         config: EncryptedStoredIcebergConfig,
+    },
+    Doris {
+        host: String,
+        query_port: u16,
+        http_port: u16,
+        database: String,
+        username: String,
+        password: EncryptedValue,
+        max_concurrent_streams: usize,
     },
 }
 
@@ -431,6 +540,30 @@ impl Decrypt<StoredDestinationConfig> for EncryptedStoredDestinationConfig {
                     })
                 }
             },
+            Self::Doris {
+                host,
+                query_port,
+                http_port,
+                database,
+                username,
+                password: encrypted_password,
+                max_concurrent_streams,
+            } => {
+                let password = SerializableSecretString::from(decrypt_text(
+                    encrypted_password,
+                    encryption_key,
+                )?);
+
+                Ok(StoredDestinationConfig::Doris {
+                    host,
+                    query_port,
+                    http_port,
+                    database,
+                    username,
+                    password,
+                    max_concurrent_streams,
+                })
+            }
         }
     }
 }

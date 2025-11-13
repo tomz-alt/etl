@@ -8,6 +8,7 @@ use etl::types::{Event, TableRow};
 use etl_config::Environment;
 use etl_config::shared::{BatchConfig, PgConnectionConfig, PipelineConfig, TlsConfig};
 use etl_destinations::bigquery::BigQueryDestination;
+use etl_destinations::doris::DorisDestination;
 use etl_destinations::encryption::install_crypto_provider;
 use etl_postgres::types::TableId;
 use etl_telemetry::tracing::init_tracing;
@@ -53,6 +54,8 @@ enum DestinationType {
     Null,
     /// Use BigQuery as the destination
     BigQuery,
+    /// Use Apache Doris as the destination
+    Doris,
 }
 
 #[derive(Subcommand, Debug)]
@@ -113,6 +116,27 @@ enum Commands {
         /// BigQuery maximum concurrent streams (optional)
         #[arg(long, default_value = "32")]
         bq_max_concurrent_streams: usize,
+        /// Doris host (required when using Doris destination)
+        #[arg(long)]
+        doris_host: Option<String>,
+        /// Doris query port (MySQL protocol, required when using Doris destination)
+        #[arg(long, default_value = "9030")]
+        doris_query_port: u16,
+        /// Doris HTTP port (StreamLoad API, required when using Doris destination)
+        #[arg(long, default_value = "8030")]
+        doris_http_port: u16,
+        /// Doris database name (required when using Doris destination)
+        #[arg(long)]
+        doris_database: Option<String>,
+        /// Doris username (required when using Doris destination)
+        #[arg(long, default_value = "root")]
+        doris_username: String,
+        /// Doris password (optional)
+        #[arg(long, default_value = "")]
+        doris_password: String,
+        /// Doris maximum concurrent streams (optional)
+        #[arg(long, default_value = "4")]
+        doris_max_concurrent_streams: usize,
     },
     /// Prepare the benchmark environment by cleaning up replication slots
     Prepare {
@@ -171,6 +195,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             bq_sa_key_file,
             bq_max_staleness_mins,
             bq_max_concurrent_streams,
+            doris_host,
+            doris_query_port,
+            doris_http_port,
+            doris_database,
+            doris_username,
+            doris_password,
+            doris_max_concurrent_streams,
         } => {
             start_pipeline(RunArgs {
                 host,
@@ -191,6 +222,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 bq_sa_key_file,
                 bq_max_staleness_mins,
                 bq_max_concurrent_streams,
+                doris_host,
+                doris_query_port,
+                doris_http_port,
+                doris_database,
+                doris_username,
+                doris_password,
+                doris_max_concurrent_streams,
             })
             .await
         }
@@ -235,6 +273,13 @@ struct RunArgs {
     bq_sa_key_file: Option<String>,
     bq_max_staleness_mins: Option<u16>,
     bq_max_concurrent_streams: usize,
+    doris_host: Option<String>,
+    doris_query_port: u16,
+    doris_http_port: u16,
+    doris_database: Option<String>,
+    doris_username: String,
+    doris_password: String,
+    doris_max_concurrent_streams: usize,
 }
 
 #[derive(Debug)]
@@ -365,6 +410,29 @@ async fn start_pipeline(args: RunArgs) -> Result<(), Box<dyn Error>> {
 
             BenchDestination::BigQuery(bigquery_dest)
         }
+
+        DestinationType::Doris => {
+            let host = args
+                .doris_host
+                .ok_or("Doris host is required when using Doris destination")?;
+            let database = args
+                .doris_database
+                .ok_or("Doris database is required when using Doris destination")?;
+
+            let doris_dest = DorisDestination::new(
+                host,
+                args.doris_query_port,
+                args.doris_http_port,
+                database,
+                args.doris_username,
+                args.doris_password,
+                args.doris_max_concurrent_streams,
+                store.clone(),
+            )
+            .await?;
+
+            BenchDestination::Doris(doris_dest)
+        }
     };
 
     let mut table_copied_notifications = vec![];
@@ -406,6 +474,7 @@ struct NullDestination;
 enum BenchDestination {
     Null(NullDestination),
     BigQuery(BigQueryDestination<NotifyingStore>),
+    Doris(DorisDestination<NotifyingStore>),
 }
 
 impl Destination for BenchDestination {
@@ -417,6 +486,7 @@ impl Destination for BenchDestination {
         match self {
             BenchDestination::Null(dest) => dest.truncate_table(table_id).await,
             BenchDestination::BigQuery(dest) => dest.truncate_table(table_id).await,
+            BenchDestination::Doris(dest) => dest.truncate_table(table_id).await,
         }
     }
 
@@ -428,6 +498,7 @@ impl Destination for BenchDestination {
         match self {
             BenchDestination::Null(dest) => dest.write_table_rows(table_id, table_rows).await,
             BenchDestination::BigQuery(dest) => dest.write_table_rows(table_id, table_rows).await,
+            BenchDestination::Doris(dest) => dest.write_table_rows(table_id, table_rows).await,
         }
     }
 
@@ -435,6 +506,7 @@ impl Destination for BenchDestination {
         match self {
             BenchDestination::Null(dest) => dest.write_events(events).await,
             BenchDestination::BigQuery(dest) => dest.write_events(events).await,
+            BenchDestination::Doris(dest) => dest.write_events(events).await,
         }
     }
 }
